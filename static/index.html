@@ -30,6 +30,8 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <!-- Firebase Firestore -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <!-- EVLYN CORE (Proprietary Logic) -->
+    <script src="../evlyn/core.js"></script>
 
     <script>
         // --- FIREBASE CONFIGURATION ---
@@ -47,55 +49,6 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         console.log("AEGIS_STANDALONE_SYNC: PROTOCOL v8 ACTIVE");
-
-        // --- EVLYN AI CORE: NEURAL ENGINE ---
-        const EVLYN_LOGIC = {
-            apiKey: "sk-f7293f4330464d3ea4638e615d5f5a13",
-            
-            processAI: async (data, mode) => {
-                const prompt = `EXAMINE ACADEMIC CASE AS AI ${mode.toUpperCase()}:
-                CRIME_CATEGORY: ${data.category}
-                ---
-                ACCUSED: ${data.accused.name} (${data.accused.dept})
-                STATEMENT: "${data.accused.statement}"
-                ---
-                VICTIM/TEACHER: ${data.victim.name} (${data.victim.dept})
-                STATEMENT: "${data.victim.statement}"
-                ---
-                WITNESS_LOGS: ${data.witnesses.map(w => w.name + ": " + w.text).join(' | ')}
-                ---
-                STRICT GUIDELINES:
-                1. Detect the specific crime based on statements (not just the category).
-                2. Evaluate reasoning from all three parties.
-                3. Apply Cyber-themed legal terminology.
-                4. Sentencing: Academic measures only (Suspension, marks deduction, apologizing).
-                5. Output Format: Cyber-terminal style. Use prefixes like [VERDICT], [SENTENCE], [ANALYSIS].`;
-
-                try {
-                    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "Authorization": `Bearer ${EVLYN_LOGIC.apiKey}`
-                        },
-                        body: JSON.stringify({
-                            model: "deepseek-chat",
-                            messages: [
-                                { "role": "system", "content": "You are EVLYN, a high-end AI Judge/Lawyer for an academic tribunal. You analyze crimes and issue sentences based on student conduct codes." },
-                                { "role": "user", "content": prompt }
-                            ],
-                            temperature: 0.7
-                        })
-                    });
-
-                    const result = await response.json();
-                    return { content: result.choices[0].message.content };
-                } catch (err) {
-                    console.error("EVLYN_CORE_FAIL:", err);
-                    return { content: "[ERROR] Neural link unstable. Reverting to local fallback... \n(Please check your internet connection and API key status.)" };
-                }
-            }
-        };
 
         let currentMode = 'lawyer';
 
@@ -135,10 +88,10 @@
             document.getElementById('result-container').classList.add('hidden');
 
             try {
-                // INTERNAL SYSTEM PROCESSING (Offline AI)
-                const result = await EVLYN_LOGIC.processAI(data, currentMode);
+                // EXTERNAL AI CORE (DeepSeek API via evlyn/core.js)
+                const content = await EVLYN_AI.process(data, currentMode);
                 
-                document.getElementById('ai-output').innerHTML = result.content.replace(/\n/g, '<br>');
+                document.getElementById('ai-output').innerHTML = content.replace(/\n/g, '<br>');
                 document.getElementById('case-id').innerText = `UUID: #${Math.random().toString(36).substr(2,9).toUpperCase()}`;
                 
                 document.getElementById('loading').classList.add('hidden');
@@ -147,7 +100,7 @@
                 // DIRECT CLOUD RECORD STORAGE (No Server Proxy)
                 await db.collection("cases").add({
                     ...data,
-                    ai_result: result.content,
+                    ai_result: content,
                     created_at: firebase.firestore.FieldValue.serverTimestamp(),
                     mode: currentMode
                 });
